@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jogo da Memória - SENAI</title>
+  
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --accent-color: #38bdf8;
+    }
+
+    html, body {
+      height: 100vh;
+      max-height: 100vh;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-color);
+      color: #f8fafc;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .card-panel {
+      background-color: var(--card-bg);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 0.75rem;
+      box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Container do Tabuleiro e Grid sem rolagem */
+    #boardWrapper {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #gameBoard {
+      display: grid;
+      justify-content: center;
+      align-content: center;
+      perspective: 1200px;
+      margin: 0 auto;
+    }
+
+    /* Cartas e Animação 3D */
+    .memory-card {
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      border-radius: 0.5rem;
+    }
+
+    .memory-card.disabled {
+      cursor: default;
+    }
+
+    .memory-card-inner {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transition: transform 0.45s cubic-bezier(0.34, 1.4, 0.64, 1);
+      border-radius: 0.5rem;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .memory-card:hover:not(.disabled):not(.flipped):not(.matched) .memory-card-inner {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 6px 14px rgba(56, 189, 248, 0.4);
+    }
+
+    .memory-card.flipped .memory-card-inner,
+    .memory-card.matched .memory-card-inner {
+      transform: rotateY(180deg);
+    }
+
+    .card-face {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      border-radius: 0.5rem;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+    }
+
+    /* Verso da Carta (mostra carta.jpg) */
+    .card-back {
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      border-color: #38bdf8;
+    }
+
+    .card-back img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      border-radius: inherit;
+    }
+
+    /* Frente da Carta (mostra imagem ou ícone limpo) */
+    .card-front {
+      background-color: #ffffff;
+      transform: rotateY(180deg);
+      padding: 0;
+      border-color: #38bdf8;
+    }
+
+    .card-front img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      border-radius: inherit;
+    }
+
+    /* Carta Combinada */
+    .memory-card.matched .card-front {
+      border: 3px solid #10b981;
+      animation: matchSuccess 0.5s ease;
+    }
+
+    @keyframes matchSuccess {
+      0% { transform: rotateY(180deg) scale(0.95); }
+      50% { transform: rotateY(180deg) scale(1.08); }
+      100% { transform: rotateY(180deg) scale(1); }
+    }
+
+    /* Top Scores / Recordes Lateral */
+    .scores-list {
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #475569 #1e293b;
+    }
+
+    .score-item {
+      background-color: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 0.4rem;
+      transition: transform 0.2s;
+    }
+
+    .score-item:hover {
+      transform: translateX(3px);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+
+    .rank-badge {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-weight: bold;
+      font-size: 0.75rem;
+    }
+
+    .rank-1 { background: linear-gradient(135deg, #fbbf24, #d97706); color: #000; }
+    .rank-2 { background: linear-gradient(135deg, #e2e8f0, #94a3b8); color: #000; }
+    .rank-3 { background: linear-gradient(135deg, #f97316, #b45309); color: #fff; }
+    .rank-other { background: #334155; color: #94a3b8; }
+
+    /* Form styling */
+    .form-control, .form-select {
+      background-color: #0f172a;
+      border: 1px solid #334155;
+      color: #f8fafc;
+    }
+
+    .form-control:focus, .form-select:focus {
+      background-color: #0f172a;
+      border-color: #38bdf8;
+      color: #f8fafc;
+      box-shadow: 0 0 0 0.2rem rgba(56, 189, 248, 0.25);
+    }
+
+    .stat-pill {
+      background-color: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 0.5rem;
+    }
+  </style>
+</head>
+<body class="p-2 d-flex flex-column">
+
+  <div class="container-fluid d-flex flex-column flex-grow-1 px-2 overflow-hidden h-100">
+    
+    <!-- Top Header: Logo SENAI + Nome/Linhas/Colunas + Botões JOGAR/REVELAR/Som -->
+    <header class="d-flex flex-wrap justify-content-between align-items-center py-2 px-3 mb-2 card-panel border-secondary border-opacity-25 gap-2 flex-shrink-0">
+      
+      <!-- Esquerda: Logo SENAI -->
+      <div class="d-flex align-items-center gap-2 flex-shrink-0">
+        <img src="logo_senai.png" alt="SENAI" style="height: 38px; width: auto; object-fit: contain;">
+      </div>
+
+      <!-- Centro: Nome do Jogador, Linhas e Colunas -->
+      <div class="d-flex flex-wrap align-items-center justify-content-center gap-2 gap-md-3 flex-grow-1">
+        
+        <!-- Nome do Jogador -->
+        <div class="d-flex align-items-center gap-1">
+          <label for="playerName" class="small fw-semibold text-secondary mb-0 text-nowrap">
+            <i class="bi bi-person-fill text-info me-1"></i>Jogador:
+          </label>
+          <input type="text" id="playerName" class="form-control form-control-sm" placeholder="Seu nome" value="Jogador 1" maxlength="25" style="width: 130px;">
+        </div>
+
+        <!-- Linhas (4 a 8) -->
+        <div class="d-flex align-items-center gap-1">
+          <label for="selectRows" class="small fw-semibold text-secondary mb-0 text-nowrap">
+            <i class="bi bi-distribute-vertical text-info me-1"></i>Linhas:
+          </label>
+          <select id="selectRows" class="form-select form-select-sm" style="width: 105px;">
+            <option value="4" selected>4 Linhas</option>
+            <option value="5">5 Linhas</option>
+            <option value="6">6 Linhas</option>
+            <option value="7">7 Linhas</option>
+            <option value="8">8 Linhas</option>
+          </select>
+        </div>
+
+        <!-- Colunas (5 a 7) -->
+        <div class="d-flex align-items-center gap-1">
+          <label for="selectCols" class="small fw-semibold text-secondary mb-0 text-nowrap">
+            <i class="bi bi-distribute-horizontal text-info me-1"></i>Colunas:
+          </label>
+          <select id="selectCols" class="form-select form-select-sm" style="width: 110px;">
+            <option value="5" selected>5 Colunas</option>
+            <option value="6">6 Colunas</option>
+            <option value="7">7 Colunas</option>
+          </select>
+        </div>
+
+      </div>
+
+      <!-- Direita: Botões JOGAR, REVELAR e Som -->
+      <div class="d-flex align-items-center gap-2 flex-shrink-0">
+        <button id="btnJogar" class="btn btn-info btn-sm fw-bold text-dark px-3 py-1 d-flex align-items-center gap-1 shadow-sm">
+          <i class="bi bi-play-fill fs-5"></i> <span>JOGAR</span>
+        </button>
+        <button id="btnRevelar" class="btn btn-outline-danger btn-sm fw-bold px-3 py-1 d-flex align-items-center gap-1 shadow-sm" disabled>
+          <i class="bi bi-eye-fill"></i> <span>REVELAR</span>
+        </button>
+        <button id="btnSoundToggle" class="btn btn-outline-secondary btn-sm py-1 px-2 d-flex align-items-center gap-1" title="Alternar Som">
+          <i id="soundIcon" class="bi bi-volume-up-fill"></i> <span class="d-none d-xl-inline">Som</span>
+        </button>
+      </div>
+
+    </header>
+
+    <!-- Main Game Area: Tabuleiro (Esquerda) e Painel Lateral (Direita) -->
+    <div class="d-flex flex-grow-1 gap-2 gap-md-3 overflow-hidden pb-1" style="min-height: 0;">
+      
+      <!-- Coluna Esquerda: Tabuleiro do Jogo que ocupa todo o espaço vertical sem rolar -->
+      <div class="card-panel p-2 flex-grow-1 d-flex flex-column justify-content-between overflow-hidden" style="min-width: 0;">
+        
+        <!-- Alerta de Revelação / Avisos -->
+        <div id="boardAlert" class="alert d-none w-100 text-center py-1 mb-1 small shadow-sm flex-shrink-0" role="alert"></div>
+
+        <!-- Wrapper do Tabuleiro (centraliza e redimensiona o grid de cartas dinamicamente) -->
+        <div id="boardWrapper" class="flex-grow-1 w-100">
+          <div id="gameBoard"></div>
+        </div>
+
+        <!-- Texto da Paridade / Dimensão diretamente abaixo do grid de cartas -->
+        <div id="parityNotice" class="text-center small py-1 flex-shrink-0 border-top border-secondary border-opacity-25 mt-1">
+          <!-- Preenchido dinamicamente: '4 × 5 = 20 cartas (10 pares correspondentes).' -->
+        </div>
+
+      </div>
+
+      <!-- Coluna Direita: Painel Lateral com Estatísticas acima e Recordes abaixo -->
+      <div class="card-panel p-3 d-flex flex-column overflow-hidden flex-shrink-0" style="width: 290px;">
+        
+        <!-- Estatísticas da Partida (acima de Recordes) -->
+        <div class="mb-3 flex-shrink-0">
+          <h3 class="h6 fw-bold mb-2 text-info d-flex align-items-center gap-2">
+            <i class="bi bi-bar-chart-fill"></i> Estatísticas
+          </h3>
+          <div class="d-flex flex-column gap-2">
+            
+            <div class="stat-pill small d-flex align-items-center justify-content-between p-2 shadow-sm">
+              <span class="d-flex align-items-center gap-2 text-secondary">
+                <i class="bi bi-stopwatch text-warning fs-5"></i> Tempo
+              </span>
+              <strong id="timerDisplay" class="text-warning fs-6">00:00</strong>
+            </div>
+
+            <div class="stat-pill small d-flex align-items-center justify-content-between p-2 shadow-sm">
+              <span class="d-flex align-items-center gap-2 text-secondary">
+                <i class="bi bi-check2-circle text-success fs-5"></i> Pares
+              </span>
+              <strong id="pairsDisplay" class="text-success fs-6">0 / 10</strong>
+            </div>
+
+            <div class="stat-pill small d-flex align-items-center justify-content-between p-2 shadow-sm">
+              <span class="d-flex align-items-center gap-2 text-secondary">
+                <i class="bi bi-arrow-repeat text-info fs-5"></i> Jogadas
+              </span>
+              <div class="text-end">
+                <strong id="movesDisplay" class="text-info fs-6">0</strong>
+                <span class="text-secondary d-block" style="font-size: 0.65rem;" id="ratioDisplay">(0.00 / par)</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <hr class="border-secondary my-2 opacity-25 flex-shrink-0">
+
+        <!-- Recordes -->
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-shrink-0">
+          <div>
+            <h2 class="h6 fw-bold mb-0 text-warning d-flex align-items-center gap-2">
+              <i class="bi bi-trophy-fill"></i> Recordes
+            </h2>
+            <div class="text-secondary" style="font-size: 0.68rem;">(ordenado por jogadas/par)</div>
+          </div>
+          <button id="btnClearScores" class="btn btn-outline-secondary btn-sm p-1 px-2" title="Limpar Histórico" style="font-size: 0.72rem;">
+            <i class="bi bi-trash3"></i> Limpar
+          </button>
+        </div>
+
+        <div id="scoresContainer" class="scores-list flex-grow-1 overflow-y-auto">
+          <!-- Rendered dynamically -->
+        </div>
+
+        <div class="mt-2 pt-2 border-top border-secondary border-opacity-25 text-secondary small text-center flex-shrink-0" style="font-size: 0.72rem;">
+          Salvo localmente no navegador
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Modal para pedir nome se estiver vazio ao clicar em JOGAR -->
+  <div class="modal fade" id="nameModal" tabindex="-1" aria-labelledby="nameModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light border-secondary">
+        <div class="modal-header border-secondary border-opacity-25">
+          <h5 class="modal-title" id="nameModalLabel">
+            <i class="bi bi-person-circle text-info me-2"></i>Informe seu Nome
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-secondary small">Para registrar seu tempo nos <strong>Recordes</strong>, informe como deseja ser chamado:</p>
+          <div class="mb-3">
+            <input type="text" id="modalPlayerNameInput" class="form-control" placeholder="Ex: Jogador 1" maxlength="25">
+          </div>
+        </div>
+        <div class="modal-footer border-secondary border-opacity-25">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" id="btnConfirmName" class="btn btn-info text-dark fw-bold">Começar Jogo!</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Vitória -->
+  <div class="modal fade" id="victoryModal" tabindex="-1" aria-labelledby="victoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light border-success">
+        <div class="modal-header border-success border-opacity-25 text-center">
+          <h5 class="modal-title w-100 text-success fw-bold" id="victoryModalLabel">
+            <i class="bi bi-trophy-fill text-warning me-2"></i>Parabéns! Você Venceu!
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body text-center py-4">
+          <div class="display-6 fw-bold text-light mb-2" id="victoryPlayerName">Jogador</div>
+          <p class="text-secondary mb-4">Você encontrou todos os pares correspondentes!</p>
+
+          <div class="row g-2 justify-content-center mb-3">
+            <div class="col-3">
+              <div class="stat-pill p-2">
+                <div class="text-secondary small" style="font-size: 0.72rem;">Jogadas/Par</div>
+                <div class="h5 fw-bold text-info mb-0" id="victoryMovesPerPair">0.00</div>
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="stat-pill p-2">
+                <div class="text-secondary small" style="font-size: 0.72rem;">Tempo</div>
+                <div class="h5 fw-bold text-warning mb-0" id="victoryTime">00:00</div>
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="stat-pill p-2">
+                <div class="text-secondary small" style="font-size: 0.72rem;">Tabuleiro</div>
+                <div class="h5 fw-bold text-light mb-0" id="victoryGrid">4x5</div>
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="stat-pill p-2">
+                <div class="text-secondary small" style="font-size: 0.72rem;">Jogadas</div>
+                <div class="h5 fw-bold text-success mb-0" id="victoryMoves">0</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="alert alert-success bg-opacity-25 border-success text-success small mb-0">
+            <i class="bi bi-check-circle-fill me-1"></i> Sua pontuação foi salva nos <strong>Recordes</strong>!
+          </div>
+        </div>
+        <div class="modal-footer border-secondary border-opacity-25 justify-content-center">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+          <button type="button" id="btnPlayAgain" class="btn btn-info text-dark fw-bold">
+            <i class="bi bi-arrow-clockwise me-1"></i> Jogar Novamente
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap 5 JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Jogo da Memória Logic (Pure Embedded JavaScript) -->
+  <script>
+    (function() {
+      // Constantes e Configurações
+      const TOTAL_AVAILABLE_PAIRS = 28;
+      const CARD_BACK_IMAGE = 'carta.jpg';
+      const CARD_BACK_FALLBACK = 'carta.png';
+      const STORAGE_SCORES_KEY = 'memoria_top_scores_v1';
+      const STORAGE_PLAYER_KEY = 'memoria_player_name';
+      const STORAGE_SOUND_KEY = 'memoria_sound_enabled';
+
+      // Elementos do DOM
+      const selectRows = document.getElementById('selectRows');
+      const selectCols = document.getElementById('selectCols');
+      const playerNameInput = document.getElementById('playerName');
+      const btnJogar = document.getElementById('btnJogar');
+      const btnRevelar = document.getElementById('btnRevelar');
+      const parityNotice = document.getElementById('parityNotice');
+      const timerDisplay = document.getElementById('timerDisplay');
+      const pairsDisplay = document.getElementById('pairsDisplay');
+      const movesDisplay = document.getElementById('movesDisplay');
+      const ratioDisplay = document.getElementById('ratioDisplay');
+      const gameBoard = document.getElementById('gameBoard');
+      const boardWrapper = document.getElementById('boardWrapper');
+      const boardAlert = document.getElementById('boardAlert');
+      const scoresContainer = document.getElementById('scoresContainer');
+      const btnClearScores = document.getElementById('btnClearScores');
+      const btnSoundToggle = document.getElementById('btnSoundToggle');
+      const soundIcon = document.getElementById('soundIcon');
+
+      // Modais e Fallback Seguro
+      const modalPlayerNameInput = document.getElementById('modalPlayerNameInput');
+      const btnConfirmName = document.getElementById('btnConfirmName');
+      const victoryPlayerName = document.getElementById('victoryPlayerName');
+      const victoryTime = document.getElementById('victoryTime');
+      const victoryGrid = document.getElementById('victoryGrid');
+      const victoryMoves = document.getElementById('victoryMoves');
+      const victoryMovesPerPair = document.getElementById('victoryMovesPerPair');
+      const btnPlayAgain = document.getElementById('btnPlayAgain');
+
+      let bsNameModal = null;
+      let bsVictoryModal = null;
+
+      try {
+        if (window.bootstrap && window.bootstrap.Modal) {
+          bsNameModal = new bootstrap.Modal(document.getElementById('nameModal'));
+          bsVictoryModal = new bootstrap.Modal(document.getElementById('victoryModal'));
+        }
+      } catch (err) {
+        console.warn('Bootstrap Modal indisponível, usando fallback seguro.', err);
+      }
+
+      function showModal(bsInstance, modalId) {
+        if (bsInstance && typeof bsInstance.show === 'function') {
+          bsInstance.show();
+        } else {
+          const el = document.getElementById(modalId);
+          if (el) {
+            el.classList.add('show');
+            el.style.display = 'block';
+            let backdrop = document.getElementById('customBackdrop');
+            if (!backdrop) {
+              backdrop = document.createElement('div');
+              backdrop.id = 'customBackdrop';
+              backdrop.className = 'modal-backdrop fade show';
+              document.body.appendChild(backdrop);
+            }
+          }
+        }
+      }
+
+      function hideModal(bsInstance, modalId) {
+        if (bsInstance && typeof bsInstance.hide === 'function') {
+          bsInstance.hide();
+        } else {
+          const el = document.getElementById(modalId);
+          if (el) {
+            el.classList.remove('show');
+            el.style.display = 'none';
+            const backdrop = document.getElementById('customBackdrop');
+            if (backdrop) backdrop.remove();
+          }
+        }
+      }
+
+      document.querySelectorAll('[data-bs-dismiss="modal"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          hideModal(bsNameModal, 'nameModal');
+          hideModal(bsVictoryModal, 'victoryModal');
+        });
+      });
+
+      // Estado do Jogo
+      let gameState = {
+        isPlaying: false,
+        isRevealed: false,
+        isLocked: false,
+        rows: 4,
+        cols: 5,
+        totalPairs: 10,
+        matchedPairs: 0,
+        moves: 0,
+        startTime: null,
+        timerInterval: null,
+        elapsedSeconds: 0,
+        flippedCards: [],
+        cards: []
+      };
+
+      // Áudio Web Audio API (Sons sintetizados puros)
+      let soundEnabled = localStorage.getItem(STORAGE_SOUND_KEY) !== 'false';
+      let audioCtx = null;
+
+      function getAudioContext() {
+        if (!audioCtx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) {
+            audioCtx = new AudioContext();
+          }
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        return audioCtx;
+      }
+
+      function playSound(type) {
+        if (!soundEnabled) return;
+        try {
+          const ctx = getAudioContext();
+          if (!ctx) return;
+          const now = ctx.currentTime;
+
+          if (type === 'flip') {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(600, now);
+            osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
+            gain.gain.setValueAtTime(0.15, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.08);
+          } else if (type === 'match') {
+            [523.25, 659.25, 783.99].forEach((freq, idx) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+              gain.gain.setValueAtTime(0.2, now + idx * 0.08);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(now + idx * 0.08);
+              osc.stop(now + idx * 0.08 + 0.25);
+            });
+          } else if (type === 'fail') {
+            [320, 240].forEach((freq, idx) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sawtooth';
+              osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+              gain.gain.setValueAtTime(0.1, now + idx * 0.1);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.15);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(now + idx * 0.1);
+              osc.stop(now + idx * 0.1 + 0.15);
+            });
+          } else if (type === 'victory') {
+            const notes = [523.25, 659.25, 783.99, 1046.5];
+            notes.forEach((freq, idx) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+              gain.gain.setValueAtTime(0.25, now + idx * 0.12);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.4);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(now + idx * 0.12);
+              osc.stop(now + idx * 0.12 + 0.4);
+            });
+          }
+        } catch (e) {
+          console.warn('Audio error:', e);
+        }
+      }
+
+      function updateSoundUI() {
+        if (soundEnabled) {
+          soundIcon.className = 'bi bi-volume-up-fill';
+          btnSoundToggle.classList.remove('btn-outline-danger');
+          btnSoundToggle.classList.add('btn-outline-secondary');
+        } else {
+          soundIcon.className = 'bi bi-volume-mute-fill text-danger';
+          btnSoundToggle.classList.remove('btn-outline-secondary');
+          btnSoundToggle.classList.add('btn-outline-danger');
+        }
+      }
+
+      btnSoundToggle.addEventListener('click', () => {
+        soundEnabled = !soundEnabled;
+        localStorage.setItem(STORAGE_SOUND_KEY, soundEnabled);
+        updateSoundUI();
+        if (soundEnabled) {
+          playSound('flip');
+        }
+      });
+
+      // Validação de Paridade Linha x Coluna
+      function checkParity() {
+        const rows = parseInt(selectRows.value, 10);
+        const cols = parseInt(selectCols.value, 10);
+        const total = rows * cols;
+        const isEven = total % 2 === 0;
+        const pairs = total / 2;
+
+        if (isEven) {
+          parityNotice.innerHTML = `
+            <span class="text-success fw-semibold">
+              <i class="bi bi-check-circle-fill me-1"></i>
+              ${rows} × ${cols} = <strong>${total} cartas</strong> (${pairs} pares correspondentes).
+            </span>
+          `;
+          btnJogar.disabled = false;
+          btnJogar.classList.remove('btn-secondary');
+          btnJogar.classList.add('btn-info');
+          return true;
+        } else {
+          parityNotice.innerHTML = `
+            <span class="text-danger fw-semibold d-inline-flex align-items-center flex-wrap gap-1 justify-content-center">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i>
+              Aviso: ${rows} × ${cols} = <strong>${total} cartas (ímpar)</strong>! O produto deve ser sempre <strong>par</strong>.
+              <button type="button" class="btn btn-sm btn-outline-warning ms-1 py-0 px-2" style="font-size: 0.75rem;" onclick="document.getElementById('selectCols').value='6'; document.getElementById('selectCols').dispatchEvent(new Event('change'));">
+                Ajustar para 6 Colunas
+              </button>
+            </span>
+          `;
+          btnJogar.disabled = true;
+          btnJogar.classList.remove('btn-info');
+          btnJogar.classList.add('btn-secondary');
+          return false;
+        }
+      }
+
+      // Ao mudar dropdowns, atualiza a validação e remonta a prévia das cartas
+      function onGridConfigChange() {
+        const isValid = checkParity();
+        if (isValid && !gameState.isPlaying) {
+          createBoardCards(false);
+        }
+      }
+
+      selectRows.addEventListener('change', onGridConfigChange);
+      selectCols.addEventListener('change', onGridConfigChange);
+
+      // Formatação de Tempo (mm:ss)
+      function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      }
+
+      // Timer
+      function startTimer() {
+        stopTimer();
+        gameState.elapsedSeconds = 0;
+        timerDisplay.textContent = '00:00';
+        gameState.startTime = Date.now();
+        gameState.timerInterval = setInterval(() => {
+          gameState.elapsedSeconds = Math.floor((Date.now() - gameState.startTime) / 1000);
+          timerDisplay.textContent = formatTime(gameState.elapsedSeconds);
+        }, 1000);
+      }
+
+      function stopTimer() {
+        if (gameState.timerInterval) {
+          clearInterval(gameState.timerInterval);
+          gameState.timerInterval = null;
+        }
+      }
+
+      // Embaralhamento (Fisher-Yates)
+      function shuffle(array) {
+        const arr = [...array];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+
+      // Preparação das Cartas (Seleção de (Linhas * Colunas / 2) pares únicos)
+      function prepareCards(rows, cols) {
+        const totalCards = rows * cols;
+        const totalPairs = totalCards / 2;
+
+        if (totalPairs > TOTAL_AVAILABLE_PAIRS) {
+          console.error(`Número de pares solicitado (${totalPairs}) maior que os ${TOTAL_AVAILABLE_PAIRS} disponíveis.`);
+          return [];
+        }
+
+        // Gera lista de 1 a 28 e seleciona totalPairs aleatoriamente
+        const allNumbers = Array.from({ length: TOTAL_AVAILABLE_PAIRS }, (_, i) => i + 1);
+        const chosenNumbers = shuffle(allNumbers).slice(0, totalPairs);
+
+        // Para cada número sorteado, cria 1 carta de icones e 1 carta de imagens
+        const deck = [];
+        chosenNumbers.forEach((num) => {
+          const formattedNum = String(num).padStart(2, '0');
+          // Carta do tipo Ícone
+          deck.push({
+            pairId: num,
+            type: 'icone',
+            imageSrc: `icones/${formattedNum}.png`
+          });
+          // Carta do tipo Imagem
+          deck.push({
+            pairId: num,
+            type: 'imagem',
+            imageSrc: `imagens/${formattedNum}.png`
+          });
+        });
+
+        // Embaralha o baralho completo para dispor no tabuleiro
+        return shuffle(deck);
+      }
+
+      // Pré-carregamento das imagens no cache do navegador
+      function preloadGameImages(cards) {
+        cards.forEach(card => {
+          const img = new Image();
+          img.src = card.imageSrc;
+        });
+      }
+
+      // Redimensionamento Inteligente: garante que TODAS as cartas caibam no espaço vertical e horizontal sem rolar a tela
+      function resizeBoardToFit() {
+        if (!boardWrapper) return;
+        const availW = boardWrapper.clientWidth - 12;
+        const availH = boardWrapper.clientHeight - 12;
+        if (availW <= 0 || availH <= 0) return;
+
+        const rows = gameState.rows || 4;
+        const cols = gameState.cols || 5;
+
+        // Gap adaptativo conforme o espaço
+        const gap = Math.min(8, Math.max(4, Math.floor(availW / (cols * 18))));
+
+        // Proporção original da carta (218 de largura por 246 de altura)
+        const ratio = 218 / 246;
+
+        // Limite baseado na altura disponível
+        const maxHFromAvailHeight = (availH - (rows - 1) * gap) / rows;
+        // Limite baseado na largura disponível
+        const maxWFromAvailWidth = (availW - (cols - 1) * gap) / cols;
+        const maxHFromAvailWidth = maxWFromAvailWidth / ratio;
+
+        // A menor altura garante que nunca extrapole nem a altura nem a largura disponível
+        const cardH = Math.max(20, Math.floor(Math.min(maxHFromAvailHeight, maxHFromAvailWidth)));
+        const cardW = Math.floor(cardH * ratio);
+
+        const totalGridW = cols * cardW + (cols - 1) * gap;
+        const totalGridH = rows * cardH + (rows - 1) * gap;
+
+        gameBoard.style.width = `${totalGridW}px`;
+        gameBoard.style.height = `${totalGridH}px`;
+        gameBoard.style.gridTemplateColumns = `repeat(${cols}, ${cardW}px)`;
+        gameBoard.style.gridTemplateRows = `repeat(${rows}, ${cardH}px)`;
+        gameBoard.style.gap = `${gap}px`;
+      }
+
+      window.addEventListener('resize', resizeBoardToFit);
+
+      if (window.ResizeObserver && boardWrapper) {
+        const ro = new ResizeObserver(() => resizeBoardToFit());
+        ro.observe(boardWrapper);
+      }
+
+      // Criação visual das Cartas no Tabuleiro
+      function renderBoard(cards, rows, cols) {
+        gameBoard.innerHTML = '';
+
+        cards.forEach((card, index) => {
+          const cardEl = document.createElement('div');
+          cardEl.className = 'memory-card';
+          cardEl.dataset.index = index;
+          cardEl.dataset.pairId = card.pairId;
+          cardEl.dataset.type = card.type;
+
+          cardEl.innerHTML = `
+            <div class="memory-card-inner">
+              <div class="card-face card-back">
+                <img src="${CARD_BACK_IMAGE}" alt="Verso" onerror="this.onerror=null; this.src='${CARD_BACK_FALLBACK}';">
+              </div>
+              <div class="card-face card-front">
+                <img src="${card.imageSrc}" alt="Carta ${card.pairId}">
+              </div>
+            </div>
+          `;
+
+          cardEl.addEventListener('click', () => onCardClicked(index));
+          gameBoard.appendChild(cardEl);
+        });
+
+        // Ajusta as dimensões para caber perfeitamente no espaço visível
+        resizeBoardToFit();
+        setTimeout(resizeBoardToFit, 60);
+      }
+
+      // Monta as cartas do tabuleiro
+      function createBoardCards(reshuffle = true) {
+        const rows = parseInt(selectRows.value, 10);
+        const cols = parseInt(selectCols.value, 10);
+        const totalCards = rows * cols;
+        const totalPairs = totalCards / 2;
+
+        gameState.rows = rows;
+        gameState.cols = cols;
+        gameState.totalPairs = totalPairs;
+        pairsDisplay.textContent = `0 / ${totalPairs}`;
+
+        gameState.cards = prepareCards(rows, cols);
+        preloadGameImages(gameState.cards);
+        renderBoard(gameState.cards, rows, cols);
+      }
+
+      // Clique em uma carta
+      function onCardClicked(index) {
+        // Se ainda não clicou em JOGAR, inicia automaticamente a partida com o nome atual!
+        if (!gameState.isPlaying && !gameState.isRevealed) {
+          const currentName = playerNameInput.value.trim() || 'Jogador 1';
+          startGameSession(currentName, false);
+        }
+
+        if (gameState.isRevealed || gameState.isLocked) return;
+
+        const cardEl = gameBoard.children[index];
+        if (!cardEl) return;
+
+        // Se já está virada ou combinada, ignora
+        if (cardEl.classList.contains('flipped') || cardEl.classList.contains('matched')) {
+          return;
+        }
+
+        // Vira a carta
+        cardEl.classList.add('flipped');
+        playSound('flip');
+        gameState.flippedCards.push({ index, element: cardEl, data: gameState.cards[index] });
+
+        // Quando virar 2 cartas, faz a verificação
+        if (gameState.flippedCards.length === 2) {
+          gameState.moves++;
+          movesDisplay.textContent = gameState.moves;
+          if (ratioDisplay && gameState.totalPairs > 0) {
+            ratioDisplay.textContent = `(${(gameState.moves / gameState.totalPairs).toFixed(2)} / par)`;
+          }
+          gameState.isLocked = true;
+
+          const [first, second] = gameState.flippedCards;
+
+          // Confere se formam par (mesmo pairId)
+          if (first.data.pairId === second.data.pairId) {
+            // Par encontrado!
+            setTimeout(() => {
+              first.element.classList.add('matched');
+              second.element.classList.add('matched');
+              playSound('match');
+
+              gameState.matchedPairs++;
+              pairsDisplay.textContent = `${gameState.matchedPairs} / ${gameState.totalPairs}`;
+              gameState.flippedCards = [];
+              gameState.isLocked = false;
+
+              // Verifica vitória
+              if (gameState.matchedPairs === gameState.totalPairs) {
+                onVictory();
+              }
+            }, 450);
+          } else {
+            // Não combinam: desvira após intervalo
+            setTimeout(() => {
+              first.element.classList.remove('flipped');
+              second.element.classList.remove('flipped');
+              playSound('fail');
+              gameState.flippedCards = [];
+              gameState.isLocked = false;
+            }, 950);
+          }
+        }
+      }
+
+      // Fim de jogo: Vitória
+      function onVictory() {
+        stopTimer();
+        gameState.isPlaying = false;
+        btnRevelar.disabled = true;
+        selectRows.disabled = false;
+        selectCols.disabled = false;
+
+        playSound('victory');
+
+        // Confetes festivos!
+        if (typeof confetti === 'function') {
+          confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+          setTimeout(() => {
+            confetti({ particleCount: 80, angle: 60, spread: 60, origin: { x: 0 } });
+            confetti({ particleCount: 80, angle: 120, spread: 60, origin: { x: 1 } });
+          }, 300);
+        }
+
+        const playerName = (playerNameInput.value || 'Jogador').trim();
+        const formattedTime = formatTime(gameState.elapsedSeconds);
+        const gridDesc = `${gameState.rows}x${gameState.cols}`;
+        const movesPerPair = Number((gameState.moves / gameState.totalPairs).toFixed(2));
+
+        // Salva nos Recordes lateral
+        saveScore({
+          name: playerName,
+          timeSec: gameState.elapsedSeconds,
+          timeStr: formattedTime,
+          grid: gridDesc,
+          moves: gameState.moves,
+          pairs: gameState.totalPairs,
+          movesPerPair: movesPerPair,
+          date: new Date().toLocaleDateString('pt-BR')
+        });
+
+        // Atualiza e exibe modal de vitória
+        victoryPlayerName.textContent = playerName;
+        victoryTime.textContent = formattedTime;
+        victoryGrid.textContent = gridDesc;
+        victoryMoves.textContent = gameState.moves;
+        if (victoryMovesPerPair) {
+          victoryMovesPerPair.textContent = movesPerPair.toFixed(2);
+        }
+        showModal(bsVictoryModal, 'victoryModal');
+      }
+
+      // Ação do Botão REVELAR
+      btnRevelar.addEventListener('click', () => {
+        if (!gameState.isPlaying || gameState.isRevealed) return;
+
+        // Encerra timer e marca estado
+        stopTimer();
+        gameState.isPlaying = false;
+        gameState.isRevealed = true;
+        btnRevelar.disabled = true;
+        selectRows.disabled = false;
+        selectCols.disabled = false;
+
+        // Vira todas as cartas restantes
+        const allCards = gameBoard.querySelectorAll('.memory-card');
+        allCards.forEach(card => {
+          card.classList.add('flipped');
+          card.classList.add('disabled');
+        });
+
+        // Exibe aviso visual
+        boardAlert.className = 'alert alert-warning text-center py-1 mb-1 shadow-sm';
+        boardAlert.innerHTML = `
+          <i class="bi bi-eye-slash-fill me-1"></i>
+          <strong>Jogo Encerrado!</strong> Todas as cartas foram reveladas. Nenhuma pontuação foi enviada para os Recordes.
+        `;
+        boardAlert.classList.remove('d-none');
+        resizeBoardToFit();
+      });
+
+      // Inicia a sessão de jogo (timer e controles)
+      function startGameSession(playerName, shouldReshuffle = true) {
+        if (!checkParity()) return;
+
+        // Limpa alertas anteriores
+        boardAlert.classList.add('d-none');
+
+        // Atualiza estado do jogo
+        gameState.isPlaying = true;
+        gameState.isRevealed = false;
+        gameState.isLocked = false;
+        gameState.matchedPairs = 0;
+        gameState.moves = 0;
+        gameState.flippedCards = [];
+
+        // Atualiza contadores na interface
+        movesDisplay.textContent = '0';
+        pairsDisplay.textContent = `0 / ${gameState.totalPairs}`;
+        if (ratioDisplay) {
+          ratioDisplay.textContent = '(0.00 / par)';
+        }
+
+        // Se solicitado, sorteia um baralho novo
+        if (shouldReshuffle) {
+          createBoardCards(true);
+        }
+
+        // Controles durante a partida
+        btnRevelar.disabled = false;
+        selectRows.disabled = true;
+        selectCols.disabled = true;
+
+        // Inicia cronômetro
+        startTimer();
+
+        // Guarda nome no localStorage
+        if (playerName) {
+          playerNameInput.value = playerName;
+          localStorage.setItem(STORAGE_PLAYER_KEY, playerName);
+        }
+      }
+
+      // Clique no botão JOGAR
+      btnJogar.addEventListener('click', () => {
+        const currentName = playerNameInput.value.trim();
+        if (!currentName) {
+          modalPlayerNameInput.value = localStorage.getItem(STORAGE_PLAYER_KEY) || 'Jogador 1';
+          showModal(bsNameModal, 'nameModal');
+          setTimeout(() => modalPlayerNameInput.focus(), 400);
+        } else {
+          startGameSession(currentName, true);
+        }
+      });
+
+      // Confirmação do nome no modal
+      btnConfirmName.addEventListener('click', () => {
+        const name = modalPlayerNameInput.value.trim() || 'Jogador 1';
+        playerNameInput.value = name;
+        hideModal(bsNameModal, 'nameModal');
+        startGameSession(name, true);
+      });
+
+      modalPlayerNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          btnConfirmName.click();
+        }
+      });
+
+      btnPlayAgain.addEventListener('click', () => {
+        hideModal(bsVictoryModal, 'victoryModal');
+        startGameSession(playerNameInput.value.trim(), true);
+      });
+
+      // Gerenciamento de Recordes (Local Storage)
+      function getScores() {
+        try {
+          const raw = localStorage.getItem(STORAGE_SCORES_KEY);
+          return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+          return [];
+        }
+      }
+
+      // Calcula jogadas por par para ordenação e exibição
+      function getMovesPerPair(item) {
+        if (typeof item.movesPerPair === 'number' && !isNaN(item.movesPerPair)) {
+          return item.movesPerPair;
+        }
+        const [r, c] = (item.grid || '4x5').split('x').map(Number);
+        const pairs = (r && c) ? (r * c) / 2 : (item.pairs || 10);
+        return item.moves ? Number((item.moves / pairs).toFixed(2)) : 999;
+      }
+
+      // Comparador: menor 'jogadas por par' primeiro; desempate por menor tempo
+      function compareScores(a, b) {
+        const mppA = getMovesPerPair(a);
+        const mppB = getMovesPerPair(b);
+        if (mppA !== mppB) {
+          return mppA - mppB;
+        }
+        if (a.timeSec !== b.timeSec) {
+          return a.timeSec - b.timeSec;
+        }
+        return a.moves - b.moves;
+      }
+
+      function saveScore(newScore) {
+        const scores = getScores();
+        scores.push(newScore);
+
+        // Ordena por jogadas por par (menor = melhor)
+        scores.sort(compareScores);
+
+        // Mantém top 50
+        const top50 = scores.slice(0, 50);
+        localStorage.setItem(STORAGE_SCORES_KEY, JSON.stringify(top50));
+        renderScores();
+      }
+
+      function renderScores() {
+        const scores = getScores();
+        // Garante que todo o histórico seja ordenado por jogadas por par
+        scores.sort(compareScores);
+        scoresContainer.innerHTML = '';
+
+        if (scores.length === 0) {
+          scoresContainer.innerHTML = `
+            <div class="text-center py-4 text-secondary small">
+              <i class="bi bi-clock-history fs-3 d-block mb-2 opacity-50"></i>
+              Nenhum recorde registrado ainda.<br>Vença uma partida para aparecer aqui!
+            </div>
+          `;
+          return;
+        }
+
+        scores.forEach((item, index) => {
+          let rankClass = 'rank-other';
+          let rankIcon = `#${index + 1}`;
+          if (index === 0) { rankClass = 'rank-1'; rankIcon = '🥇'; }
+          else if (index === 1) { rankClass = 'rank-2'; rankIcon = '🥈'; }
+          else if (index === 2) { rankClass = 'rank-3'; rankIcon = '🥉'; }
+
+          const mpp = getMovesPerPair(item);
+
+          const scoreEl = document.createElement('div');
+          scoreEl.className = 'score-item p-2 mb-2 d-flex align-items-center gap-2';
+          scoreEl.innerHTML = `
+            <div class="rank-badge ${rankClass} flex-shrink-0">${rankIcon}</div>
+            <div class="flex-grow-1 overflow-hidden">
+              <div class="fw-semibold text-truncate small text-light" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+              <div class="d-flex align-items-center flex-wrap gap-1 small text-secondary" style="font-size: 0.7rem;">
+                <span><i class="bi bi-grid-fill text-info"></i> ${item.grid}</span>
+                <span>•</span>
+                <span><i class="bi bi-stopwatch"></i> ${item.timeStr}</span>
+                <span>•</span>
+                <span>${item.moves} jog.</span>
+              </div>
+            </div>
+            <div class="text-end flex-shrink-0">
+              <span class="badge bg-dark border border-info text-info fw-bold font-monospace" style="font-size: 0.78rem;" title="${mpp.toFixed(2)} jogadas por par">
+                ${mpp.toFixed(2)} <span style="font-size: 0.62rem; font-weight: normal;">jog/par</span>
+              </span>
+            </div>
+          `;
+          scoresContainer.appendChild(scoreEl);
+        });
+      }
+
+      btnClearScores.addEventListener('click', () => {
+        if (confirm('Deseja realmente zerar todo o histórico de Recordes?')) {
+          localStorage.removeItem(STORAGE_SCORES_KEY);
+          renderScores();
+        }
+      });
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // Inicialização imediata ao carregar a página
+      function initApp() {
+        const savedPlayer = localStorage.getItem(STORAGE_PLAYER_KEY);
+        playerNameInput.value = savedPlayer || 'Jogador 1';
+
+        checkParity();
+        renderScores();
+        updateSoundUI();
+        createBoardCards(true);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initApp);
+      } else {
+        initApp();
+      }
+    })();
+  </script>
+</body>
+</html>
